@@ -1,0 +1,118 @@
+apiVersion: elasticsearch.k8s.elastic.co/v1
+kind: Elasticsearch
+metadata:
+  name: apps-elasticsearch
+spec:
+  version: 8.14.3
+  nodeSets:
+  - name: master
+    count: 3
+    volumeClaimTemplates:
+      - metadata:
+          name: elasticsearch-data
+        spec:
+          accessModes:
+          - ReadWriteOnce
+          resources:
+            requests:
+              storage: 20Gi
+          storageClassName: ocs-storagecluster-ceph-rbd
+    config:
+      node.roles: ["master", "remote_cluster_client"]
+      node.store.allow_mmap: false
+    podTemplate:
+      spec:
+        # nodeSelector:
+        #   node-role.eei.gov.eg/apps-elastic-master: 'true'
+        containers:
+        - name: elasticsearch
+          resources:
+            requests:
+              cpu: 1
+              memory: 1Gi
+            limits:
+              cpu: 2
+              memory: 2Gi
+  - name: data
+    count: 3
+    volumeClaimTemplates:
+      - metadata:
+          name: elasticsearch-data
+        spec:
+          accessModes:
+          - ReadWriteOnce
+          resources:
+            requests:
+              storage: 50Gi
+          storageClassName: ocs-storagecluster-ceph-rbd
+    config:
+      node.roles: ["data", "remote_cluster_client"]
+      #node.store.allow_mmap: false
+    podTemplate:  
+      spec:
+#        nodeSelector:
+#          node-role.eei.gov.eg/apps-elastic-data: 'true'
+        containers:
+        - name: elasticsearch
+          resources:
+            requests:
+              cpu: 1
+              memory: 3Gi
+            limits:
+              cpu: 2
+              memory: 10Gi
+#  http:  
+#    tls:    
+#      certificate:  
+#        secretName: eck-cert
+---
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: elasticsearch
+spec:  
+  tls:
+    termination: passthrough
+    insecureEdgeTerminationPolicy: Redirect
+  to:
+    kind: Service
+    name: apps-elasticsearch-es-http
+
+---
+apiVersion: kibana.k8s.elastic.co/v1
+kind: Kibana
+metadata:
+  name: apps-kibana
+spec:
+  version: 8.14.0
+  count: 2
+  config:
+    elasticsearch.ssl.verificationMode: none
+  elasticsearchRef:
+    name: "apps-elasticsearch"
+  podTemplate:
+    spec:
+#      nodeSelector:
+#        node-role.eei.gov.eg/elastic: 'true'
+      containers:
+      - name: kibana
+        resources:
+          requests:
+            #cpu: 1
+            memory: 1Gi
+          limits:
+            cpu: 2
+            memory: 2Gi
+
+---
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: kibana
+spec:
+  tls:
+    termination: passthrough
+    insecureEdgeTerminationPolicy: Redirect
+  to:
+    kind: Service
+    name: apps-kibana-kb-http
